@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>User Lookup · X API</title>
+    <style>
+      :root { color-scheme: dark; --bg:#08090c; --panel:#101217; --line:#292d36; --muted:#9ba1ad; --text:#f6f7fa; --accent:#7c5cff; --good:#4cdd9b; --bad:#ff6c7b; }
+      * { box-sizing:border-box; }
+      body { margin:0; min-height:100vh; background:radial-gradient(circle at 82% 3%,#211d47 0,transparent 29rem),var(--bg); color:var(--text); font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+      main { width:min(720px,calc(100% - 36px)); margin:0 auto; padding:70px 0 48px; }
+      .brand { display:flex; align-items:center; gap:10px; color:#dce0ec; font-size:14px; font-weight:700; letter-spacing:.02em; }
+      .mark { width:28px; height:28px; display:grid; place-items:center; border:1px solid #494072; border-radius:8px; background:#191631; color:#ad9eff; font-weight:800; }
+      h1 { margin:46px 0 10px; font-size:clamp(34px,6vw,54px); line-height:1.04; letter-spacing:-.055em; }
+      .intro { max-width:580px; color:var(--muted); font-size:17px; line-height:1.6; margin:0 0 34px; }
+      .card { padding:26px; background:linear-gradient(140deg,rgba(25,28,36,.94),rgba(13,15,20,.94)); border:1px solid var(--line); border-radius:18px; box-shadow:0 24px 70px rgba(0,0,0,.3); }
+      label { display:block; margin:0 0 8px; color:#d8dce5; font-size:13px; font-weight:650; }
+      .field { margin-bottom:19px; }
+      input { width:100%; height:48px; border:1px solid #363b47; border-radius:10px; background:#0a0c10; color:var(--text); padding:0 14px; outline:none; font:inherit; transition:.18s border-color,.18s box-shadow; }
+      input:focus { border-color:#8873ff; box-shadow:0 0 0 3px rgba(124,92,255,.18); }
+      .hint { margin:7px 0 0; color:#858b98; font-size:12px; line-height:1.45; }
+      .lookup { display:flex; gap:10px; }
+      .lookup input { flex:1; }
+      button { min-width:126px; border:0; border-radius:10px; background:var(--accent); color:white; padding:0 17px; font:700 14px inherit; cursor:pointer; transition:transform .18s,background .18s; }
+      button:hover { background:#8e73ff; transform:translateY(-1px); } button:disabled { opacity:.6; cursor:wait; transform:none; }
+      #result { display:none; margin-top:23px; padding:17px; border:1px solid var(--line); border-radius:12px; background:#0b0d12; }
+      #result.show { display:block; } .result-top { display:flex; align-items:center; gap:11px; }
+      .status { width:10px; height:10px; border-radius:50%; background:var(--muted); flex:none; }.exists .status { background:var(--good); box-shadow:0 0 14px var(--good); }.missing .status,.error .status { background:var(--bad); box-shadow:0 0 14px var(--bad); }
+      .title { font-size:15px; font-weight:750; }.message { margin:6px 0 0 21px; color:var(--muted); font-size:13px; line-height:1.5; }
+      .profile { display:flex; gap:13px; align-items:center; margin:18px 0 0 21px; padding-top:16px; border-top:1px solid #222630; }.avatar { width:42px;height:42px;border-radius:50%;object-fit:cover;background:#292d36; }.name { font-weight:700;font-size:14px; }.handle { color:var(--muted);font-size:13px;margin-top:2px; }
+      footer { color:#757b87; font-size:12px; line-height:1.55; margin:22px 4px 0; } code { color:#b9acf9; }
+      @media (max-width:520px) { main{padding-top:42px}.card{padding:20px}.lookup{display:block}.lookup button{width:100%;height:48px;margin-top:10px} }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="brand"><span class="mark">X</span> API USER LOOKUP</div>
+      <h1>Does this user exist?</h1>
+      <p class="intro">Check an X account directly through the X API. Your token is used only for this request and is never stored.</p>
+      <section class="card" aria-label="User lookup form">
+        <div class="field">
+          <label for="token">Bearer token</label>
+          <input id="token" type="password" autocomplete="off" placeholder="Paste your X API bearer token" />
+          <p class="hint">Requires an X developer bearer token with access to the v2 Users endpoint.</p>
+        </div>
+        <div class="field">
+          <label for="username">X username</label>
+          <div class="lookup">
+            <input id="username" type="text" autocomplete="off" placeholder="e.g. openai" aria-label="X username" />
+            <button id="check" type="button">Check user</button>
+          </div>
+        </div>
+        <div id="result" role="status" aria-live="polite"></div>
+      </section>
+      <footer>Requests go to <code>api.x.com/2/users/by/username</code>. If your browser blocks the request due to CORS, make the same call from a small backend proxy so the bearer token stays private.</footer>
+    </main>
+    <script>
+      const token = document.querySelector('#token');
+      const username = document.querySelector('#username');
+      const button = document.querySelector('#check');
+      const result = document.querySelector('#result');
+
+      function show(kind, title, message, user) {
+        result.className = `show ${kind}`;
+        result.innerHTML = `<div class="result-top"><span class="status"></span><span class="title">${title}</span></div><p class="message">${message}</p>`;
+        if (user) {
+          const avatar = user.profile_image_url ? `<img class="avatar" src="${user.profile_image_url}" alt="">` : '<span class="avatar"></span>';
+          result.innerHTML += `<div class="profile">${avatar}<div><div class="name">${escapeHTML(user.name || user.username)}</div><div class="handle">@${escapeHTML(user.username)}</div></div></div>`;
+        }
+      }
+      function escapeHTML(value) { const div = document.createElement('div'); div.textContent = value; return div.innerHTML; }
+      async function checkUser() {
+        const cleanToken = token.value.trim();
+        const handle = username.value.trim().replace(/^@/, '');
+        if (!cleanToken || !handle) { show('error', 'Missing information', 'Enter both a bearer token and a username.'); return; }
+        button.disabled = true; button.textContent = 'Checking…';
+        try {
+          const response = await fetch(`https://api.x.com/2/users/by/username/${encodeURIComponent(handle)}?user.fields=profile_image_url`, { headers: { Authorization: `Bearer ${cleanToken}` } });
+          const body = await response.json().catch(() => ({}));
+          if (response.ok && body.data) show('exists', 'User exists', `@${body.data.username} was found on X.`, body.data);
+          else if (response.status === 404) show('missing', 'User not found', `No X account named @${handle} was found.`);
+          else if (response.status === 401 || response.status === 403) show('error', 'Token was rejected', 'Check that your bearer token is valid and has access to this endpoint.');
+          else show('error', 'Could not complete lookup', body.detail || body.title || `The API returned status ${response.status}.`);
+        } catch (error) { show('error', 'Request could not be sent', 'Your browser may be blocking the API request (CORS), or there may be a network problem.'); }
+        finally { button.disabled = false; button.textContent = 'Check user'; }
+      }
+      button.addEventListener('click', checkUser);
+      username.addEventListener('keydown', event => { if (event.key === 'Enter') checkUser(); });
+    </script>
+  </body>
+</html>
